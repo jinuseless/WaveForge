@@ -1,0 +1,67 @@
+name: Build WaveForge
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\installer.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WaveForge-Windows-Setup
+          path: dist/WaveForge-Windows-Setup.exe
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WaveForge-Windows-Setup.exe
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G Xcode
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Make installer package
+        run: |
+          mkdir -p dist
+          pkgbuild --component "build/WaveForge_artefacts/Release/VST3/WaveForge.vst3" \
+            --install-location "/Library/Audio/Plug-Ins/VST3" \
+            dist/WaveForge-Mac.pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WaveForge-Mac-Installer
+          path: dist/WaveForge-Mac.pkg
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WaveForge-Mac.pkg
